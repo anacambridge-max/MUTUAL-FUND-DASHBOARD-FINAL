@@ -1,234 +1,38 @@
 "use client";
-import { useState, useEffect, useCallback } from "react";
-import { DashboardData } from "@/lib/aiEngine";
-import { TopNav } from "@/components/layout/TopNav";
-import { Sidebar } from "@/components/layout/Sidebar";
-import { MarketStatusBar } from "@/components/dashboard/MarketStatusBar";
-import { HeroMetrics } from "@/components/dashboard/HeroMetrics";
-import { FundRankingTable } from "@/components/dashboard/FundRankingTable";
-import { WeeklyDecisionEngine } from "@/components/dashboard/WeeklyDecisionEngine";
-import { MonthlyDecisionEngine } from "@/components/dashboard/MonthlyDecisionEngine";
-import { SmartBudgetEngine } from "@/components/dashboard/SmartBudgetEngine";
-import { PortfolioCharts } from "@/components/dashboard/PortfolioCharts";
-import { SectorHeatmap } from "@/components/dashboard/SectorHeatmap";
-import { FiiDiiDashboard } from "@/components/dashboard/FiiDiiDashboard";
-import { GoldDashboard } from "@/components/dashboard/GoldDashboard";
-import { IndexOpportunityEngine } from "@/components/dashboard/IndexOpportunityEngine";
-import { AllFundsView } from "@/components/dashboard/AllFundsView";
-import { PageLoader } from "@/components/ui/LoadingSpinner";
-import { RefreshCw } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import { FUNDS } from "@/lib/constants";
 
-export default function HomePage() {
-  const [activeTab, setActiveTab] = useState("dashboard");
-  const [data, setData] = useState<DashboardData | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
-  const [budget, setBudget] = useState(10000);
+type Fund = typeof FUNDS[number] & { nav:number;date:string;belowHigh:number;aboveLow:number;rsi:number;ma20:number;ma50:number;crossover:string;return3M:number;return6M:number;r3rank:number;r6rank:number;relRank:number;opportunity:number;allocationPct:number;allocation:number;history:Array<{date:string;nav:number}>;error?:string };
 
-  const fetchData = useCallback(async (showRefreshing = false) => {
-    if (showRefreshing) setRefreshing(true);
-    try {
-      const res = await fetch(`/api/dashboard?budget=${budget}`);
-      const json = await res.json();
-      if (json.success) {
-        setData(json.data);
-      }
-    } catch (err) {
-      console.error("Failed to fetch dashboard data:", err);
-    } finally {
-      setLoading(false);
-      setRefreshing(false);
-    }
-  }, [budget]);
+type Purchase={code:string;date:string;units:number;amount:number};
+const money=(n:number)=>new Intl.NumberFormat("en-IN",{style:"currency",currency:"INR",maximumFractionDigits:0}).format(n);
 
-  useEffect(() => {
-    fetchData();
-    // Auto-refresh every 5 minutes
-    const interval = setInterval(() => fetchData(true), 5 * 60 * 1000);
-    return () => clearInterval(interval);
-  }, [fetchData]);
-
-  if (loading) return <PageLoader />;
-  if (!data) return (
-    <div className="min-h-screen flex items-center justify-center bg-[#070b14]">
-      <div className="text-center">
-        <div className="text-red-400 text-lg font-bold mb-2">Failed to load dashboard</div>
-        <button onClick={() => fetchData()} className="px-4 py-2 bg-indigo-600 text-white rounded-lg text-sm">
-          Retry
-        </button>
-      </div>
-    </div>
-  );
-
-  const tabContent: Record<string, React.ReactNode> = {
-    dashboard: (
-      <div className="space-y-6 animate-fadeIn">
-        <HeroMetrics data={data} budget={budget} />
-        <FundRankingTable funds={data.funds} title="AI Fund Rankings — All 15 Funds" />
-      </div>
-    ),
-    weekly: <WeeklyDecisionEngine data={data} />,
-    monthly: <MonthlyDecisionEngine data={data} />,
-    budget: (
-      <SmartBudgetEngine
-        initialBudget={budget}
-        onBudgetChange={(b) => { setBudget(b); }}
-      />
-    ),
-    charts: <PortfolioCharts funds={data.funds} budget={budget} />,
-    sectors: <SectorHeatmap sectors={data.sectors} />,
-    indices: <IndexOpportunityEngine market={data.marketData} funds={data.funds} />,
-    market: <MarketAnalysisView data={data} />,
-    fii: <FiiDiiDashboard data={data.fiiDii} />,
-    gold: <GoldDashboard data={data.goldData} />,
-    funds: <AllFundsView funds={data.funds} />,
-  };
-
-  const tabLabels: Record<string, string> = {
-    dashboard: "Dashboard",
-    weekly: "Weekly Decision Engine",
-    monthly: "Monthly Decision Engine",
-    budget: "Smart Budget Engine",
-    charts: "Charts & Analysis",
-    sectors: "Sector Analysis",
-    indices: "Index Opportunities",
-    market: "Market Analysis",
-    fii: "FII / DII Dashboard",
-    gold: "Gold Dashboard",
-    funds: "All 15 Funds",
-  };
-
-  return (
-    <div className="flex min-h-screen bg-[#070b14]">
-      <Sidebar
-        activeTab={activeTab}
-        onTabChange={setActiveTab}
-        onRefresh={() => fetchData(true)}
-        isRefreshing={refreshing}
-      />
-
-      <div className="flex-1 flex flex-col min-w-0">
-        <TopNav
-          activeTab={activeTab}
-          onTabChange={setActiveTab}
-          onRefresh={() => fetchData(true)}
-          isRefreshing={refreshing}
-          lastUpdated={data.lastUpdated}
-        />
-        <MarketStatusBar data={data.marketData} />
-
-        <main className="flex-1 p-4 lg:p-6">
-          {/* Page Title */}
-          <div className="flex items-center justify-between mb-4">
-            <div>
-              <h1 className="text-lg font-bold text-white">{tabLabels[activeTab]}</h1>
-              <p className="text-xs text-slate-500">
-                Last updated: {new Date(data.lastUpdated).toLocaleString("en-IN")} · 15 funds · 10–15Y horizon
-              </p>
-            </div>
-            {refreshing && (
-              <div className="flex items-center gap-2 text-indigo-400 text-xs">
-                <RefreshCw size={12} className="animate-spin" />
-                <span>Updating AI scores...</span>
-              </div>
-            )}
-          </div>
-
-          {tabContent[activeTab] ?? tabContent["dashboard"]}
-        </main>
-
-        {/* Footer */}
-        <footer className="border-t border-white/5 px-6 py-3">
-          <div className="flex items-center justify-between text-xs text-slate-600">
-            <span>AI Mutual Fund Investment Decision Engine PRO · 15 Funds Fixed Portfolio</span>
-            <span>For Long-term Wealth Creation · 10–15 Year Horizon · Not Financial Advice</span>
-          </div>
-        </footer>
-      </div>
-    </div>
-  );
+export default function HomePage(){
+ const [budget,setBudget]=useState(10000); const [cadence,setCadence]=useState<"monthly"|"weekly">("monthly"); const [minPct,setMinPct]=useState(3); const [maxPct,setMaxPct]=useState(20); const [data,setData]=useState<Fund[]>([]); const [updated,setUpdated]=useState(""); const [loading,setLoading]=useState(true); const [selected,setSelected]=useState<string[]>([]); const [purchases,setPurchases]=useState<Purchase[]>([]); const [tab,setTab]=useState<"dashboard"|"planner"|"portfolio">("dashboard");
+ useEffect(()=>{try{setPurchases(JSON.parse(localStorage.getItem("sip-purchases")||"[]"));const b=Number(localStorage.getItem("sip-budget"));if(b)setBudget(b)}catch{}},[]);
+ const load=async()=>{setLoading(true);try{const r=await fetch(`/api/dashboard?budget=${budget}&t=${Date.now()}`,{cache:"no-store"});const j=await r.json();if(!j.success)throw Error(j.error);setData(j.funds);setUpdated(j.lastUpdated)}catch(e){console.error(e)}finally{setLoading(false)}};
+ useEffect(()=>{load()},[budget]);
+ const allocation=useMemo(()=>{if(!data.length)return[];const floor=minPct/100,cap=maxPct/100;const w=data.map(f=>Math.max(.01,f.opportunity/100));const sum=w.reduce((a,b)=>a+b,0);const base=floor, rem=Math.max(0,1-floor*data.length);let a=data.map((f,i)=>({...f,pct:Math.min(cap,base+rem*w[i]/sum)}));const s=a.reduce((x,f)=>x+f.pct,0);return a.map(f=>({...f,pct:f.pct/s,amount:Math.round(budget*f.pct/s/10)*10}));},[data,budget,minPct,maxPct]);
+ const totalInvested=purchases.reduce((s,p)=>s+p.amount,0); const currentValue=purchases.reduce((s,p)=>{const f=data.find(x=>x.amfiCode===p.code);return s+p.units*(f?.nav||0)},0); const gain=currentValue-totalInvested;
+ const exportCsv=()=>{const rows=["date,amfiCode,fund,units,amount",...purchases.map(p=>{const f=FUNDS.find(x=>x.amfiCode===p.code);return `${p.date},${p.code},"${f?.name||""}",${p.units},${p.amount}`})];const blob=new Blob([rows.join("\n")],{type:"text/csv"});const a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download="sip-purchases.csv";a.click()};
+ const toggle=(c:string)=>setSelected(s=>s.includes(c)?s.filter(x=>x!==c):[...s,c].slice(-4));
+ return <main className="min-h-screen bg-[#070b14] text-slate-100">
+  <header className="sticky top-0 z-20 border-b border-white/10 bg-[#070b14]/95 backdrop-blur"><div className="mx-auto max-w-[1500px] px-4 py-3 flex flex-wrap gap-3 items-center justify-between"><div><h1 className="text-xl font-black tracking-tight">Smart SIP Allocation Dashboard</h1><p className="text-[11px] text-slate-500">19-fund fixed universe · rule-based decision support · {updated?`NAV: ${new Date(updated).toLocaleString("en-IN")}`:"loading…"}</p></div><div className="flex gap-2"><button onClick={()=>setTab("dashboard")} className={`px-3 py-2 rounded-lg text-xs ${tab==="dashboard"?"bg-indigo-600":"bg-white/5"}`}>Dashboard</button><button onClick={()=>setTab("planner")} className={`px-3 py-2 rounded-lg text-xs ${tab==="planner"?"bg-indigo-600":"bg-white/5"}`}>SIP Planner</button><button onClick={()=>setTab("portfolio")} className={`px-3 py-2 rounded-lg text-xs ${tab==="portfolio"?"bg-indigo-600":"bg-white/5"}`}>Portfolio</button><button onClick={load} className="px-3 py-2 rounded-lg text-xs bg-white/5">↻ Refresh NAV</button></div></div></header>
+  <div className="mx-auto max-w-[1500px] px-4 py-5 space-y-5">
+   <div className="rounded-xl border border-amber-500/30 bg-amber-950/20 p-3 text-[11px] text-amber-200">⚠️ <b>Heuristic only:</b> Opportunity Score uses historical NAV patterns and transparent rules. It does not predict future rallies, guarantee lowest-price entries, or constitute investment advice. Mutual fund investments are subject to market risk.</div>
+   {tab==="dashboard"&&<>
+    <section className="grid grid-cols-2 lg:grid-cols-4 gap-3"><Card t="Monthly SIP" v={money(budget)}/><Card t="Current Value" v={money(currentValue)}/><Card t="Invested" v={money(totalInvested)}/><Card t="Gain / Loss" v={`${money(gain)} (${totalInvested?((gain/totalInvested)*100).toFixed(1):"0.0"}%)`}/></section>
+    <div className="grid lg:grid-cols-[1fr_360px] gap-5"><section className="rounded-xl border border-white/10 bg-white/[.03] overflow-hidden"><div className="p-4 border-b border-white/10"><div className="flex justify-between items-center"><div><h2 className="font-bold">Opportunity Leaderboard</h2><p className="text-[11px] text-slate-500">Higher score = stronger historical valuation/momentum combination.</p></div><span className="text-[11px] text-slate-500">{data.length}/19 funds</span></div></div>{loading?<div className="p-10 text-center text-slate-500">Fetching official-ish NAV history via mfapi.in…</div>:<div className="overflow-auto"><table className="w-full text-xs"><thead className="text-slate-500 border-b border-white/5"><tr><th className="p-3 text-left">Fund</th><th>Score</th><th>Below 52W High</th><th>RSI</th><th>3M Rank</th><th>6M Rank</th><th>20/50 MA</th></tr></thead><tbody>{[...data].sort((a,b)=>b.opportunity-a.opportunity).map(f=><tr key={f.amfiCode} className="border-b border-white/5 hover:bg-white/[.03]"><td className="p-3"><b>{f.shortName}</b><div className="text-[10px] text-slate-500">{f.amfiCode}</div></td><td className="text-center"><span className={`px-2 py-1 rounded ${f.opportunity>=70?"bg-emerald-500/15 text-emerald-400":f.opportunity>=50?"bg-amber-500/15 text-amber-400":"bg-slate-500/15 text-slate-300"}`}>{f.opportunity}</span></td><td className="text-center">{f.belowHigh.toFixed(1)}%</td><td className={`text-center ${f.rsi<30?"text-emerald-400":f.rsi>70?"text-red-400":""}`}>{f.rsi.toFixed(0)}</td><td className="text-center">#{f.r3rank}</td><td className="text-center">#{f.r6rank}</td><td className={`text-center ${f.crossover==="Bullish"?"text-emerald-400":"text-red-400"}`}>{f.crossover}</td></tr>)}</tbody></table></div>}</section>
+    <aside className="rounded-xl border border-white/10 bg-white/[.03] p-4"><h2 className="font-bold mb-1">This Month's SIP Split</h2><p className="text-[11px] text-slate-500 mb-4">Min {minPct}% · Max {maxPct}% · ₹{budget.toLocaleString("en-IN")}</p><div className="space-y-2">{allocation.sort((a,b)=>b.amount-a.amount).map(f=><div key={f.amfiCode} className="flex items-center gap-2"><div className="w-24 truncate text-[10px]">{f.shortName}</div><div className="h-2 flex-1 bg-white/5 rounded-full overflow-hidden"><div className="h-full bg-indigo-500" style={{width:`${f.pct*100}%`}}/></div><div className="w-16 text-right font-mono text-[11px]">{money(f.amount)}</div></div>)}</div><div className="mt-4 text-[10px] text-slate-500">Allocation is editable through guardrails below. Confirm actual purchases manually after investing at your broker/AMC.</div></aside></div>
+    <section className="rounded-xl border border-white/10 bg-white/[.03] p-4"><h2 className="font-bold mb-3">NAV History Comparison</h2><div className="flex flex-wrap gap-2 mb-3">{data.map(f=><button key={f.amfiCode} onClick={()=>toggle(f.amfiCode)} className={`px-2 py-1 rounded text-[10px] ${selected.includes(f.amfiCode)?"bg-indigo-600":"bg-white/5"}`}>{f.shortName}</button>)}</div><div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-3">{data.filter(f=>selected.includes(f.amfiCode)).map(f=><div key={f.amfiCode} className="h-28 rounded-lg bg-black/20 p-2"><div className="text-[10px] text-slate-400 mb-2">{f.shortName}</div><MiniChart points={f.history.slice(-90).map(x=>x.nav)}/></div>)}</div></section>
+   </>}
+   {tab==="planner"&&<Planner budget={budget} setBudget={b=>{setBudget(b);localStorage.setItem("sip-budget",String(b))}} cadence={cadence} setCadence={setCadence} minPct={minPct} maxPct={maxPct} setMin={setMinPct} setMax={setMaxPct} allocation={allocation}/>} 
+   {tab==="portfolio"&&<Portfolio data={data} purchases={purchases} setPurchases={p=>{setPurchases(p);localStorage.setItem("sip-purchases",JSON.stringify(p))}} totalInvested={totalInvested} currentValue={currentValue} gain={gain} exportCsv={exportCsv}/>} 
+  </div>
+  <footer className="border-t border-white/10 mt-8 py-4 text-center text-[10px] text-slate-600">Smart SIP Allocation Dashboard · Historical heuristics only · Not financial advice</footer>
+ </main>
 }
-
-// Inline Market Analysis View
-function MarketAnalysisView({ data }: { data: DashboardData }) {
-  const { marketData: m } = data;
-
-  const metrics = [
-    { label: "Nifty 50", value: m.nifty50.toLocaleString("en-IN"), change: m.nifty50Change },
-    { label: "Nifty Next 50", value: m.niftyNext50.toLocaleString("en-IN"), change: m.niftyNext50Change },
-    { label: "Nifty Midcap 150", value: m.niftyMidcap150.toLocaleString("en-IN"), change: m.niftyMidcap150Change },
-    { label: "Nifty Smallcap 250", value: m.niftySmallcap250.toLocaleString("en-IN"), change: m.niftySmallcap250Change },
-    { label: "Nifty 500", value: m.nifty500.toLocaleString("en-IN"), change: m.nifty500Change },
-    { label: "Sensex", value: m.sensex.toLocaleString("en-IN"), change: m.sensexChange },
-    { label: "India VIX", value: m.indiaVix.toFixed(2), change: null },
-    { label: "Gold (10g)", value: `₹${m.gold.toLocaleString("en-IN")}`, change: m.goldChange },
-    { label: "Silver", value: `₹${m.silver.toLocaleString("en-IN")}`, change: null },
-    { label: "USD/INR", value: m.usdInr.toFixed(2), change: null },
-    { label: "10Y Bond Yield", value: `${m.bondYield10Y}%`, change: null },
-    { label: "Repo Rate", value: `${m.repoRate}%`, change: null },
-    { label: "Inflation", value: `${m.inflation}%`, change: null },
-    { label: "Market Score", value: m.marketScore.toFixed(0), change: null },
-  ];
-
-  return (
-    <div className="space-y-4 animate-fadeIn">
-      {/* Market Regime */}
-      <div className={`p-4 rounded-xl border ${m.marketTrend === "Bull" ? "border-emerald-500/30 bg-emerald-950/20" : m.marketTrend === "Bear" ? "border-red-500/30 bg-red-950/20" : "border-amber-500/30 bg-amber-950/20"}`}>
-        <div className="text-xs font-bold uppercase tracking-wider text-slate-400 mb-1">Current Market Regime</div>
-        <div className={`text-3xl font-bold ${m.marketTrend === "Bull" ? "text-emerald-400" : m.marketTrend === "Bear" ? "text-red-400" : "text-amber-400"}`}>
-          {m.marketTrend === "Bull" ? "🐂" : m.marketTrend === "Bear" ? "🐻" : m.marketTrend === "Recovery" ? "📈" : m.marketTrend === "Correction" ? "📉" : "↔️"} {m.marketTrend.toUpperCase()} MARKET
-        </div>
-        <p className="text-xs text-slate-400 mt-1">
-          Market Score: <strong className="text-white">{m.marketScore.toFixed(0)}/100</strong> ·
-          {m.marketTrend === "Bull" ? " Strong uptrend — Ideal time to invest across all funds." :
-           m.marketTrend === "Bear" ? " Bearish phase — Focus on index funds and value picks. Excellent SIP opportunity." :
-           m.marketTrend === "Recovery" ? " Recovery underway — Increase allocation to high-quality funds." :
-           m.marketTrend === "Correction" ? " Healthy correction — Strong buying opportunity for long-term investors." :
-           " Sideways market — Continue SIP. Accumulate quality funds."}
-        </p>
-      </div>
-
-      {/* All Market Metrics */}
-      <div className="grid grid-cols-2 md:grid-cols-4 xl:grid-cols-7 gap-3">
-        {metrics.map((m) => (
-          <div key={m.label} className="p-3 rounded-xl border border-white/8 bg-white/4 hover:bg-white/6 transition-colors">
-            <div className="text-xs text-slate-500 mb-1 leading-tight">{m.label}</div>
-            <div className="text-sm font-bold text-white font-mono">{m.value}</div>
-            {m.change !== null && (
-              <div className={`text-xs font-bold font-mono mt-0.5 ${m.change >= 0 ? "text-emerald-400" : "text-red-400"}`}>
-                {m.change >= 0 ? "+" : ""}{m.change.toFixed(2)}%
-              </div>
-            )}
-          </div>
-        ))}
-      </div>
-
-      {/* Market Insights */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <div className="p-4 rounded-xl border border-indigo-500/20 bg-indigo-950/20">
-          <h3 className="text-sm font-bold text-indigo-400 mb-2">📊 Long-term Investor Analysis</h3>
-          <ul className="space-y-1.5 text-xs text-slate-300">
-            <li>• <strong>India VIX at {m.indiaVix.toFixed(2)}</strong>: {m.indiaVix < 15 ? "Low volatility — Market stability conducive to investing" : m.indiaVix < 20 ? "Moderate volatility — Normal market conditions" : "High volatility — Excellent opportunity for SIP averaging"}</li>
-            <li>• <strong>Bond Yield at {m.bondYield10Y}%</strong>: {m.bondYield10Y > 7.5 ? "Rising yields may pressure equity valuations short-term" : "Yield levels favorable for equity allocation"}</li>
-            <li>• <strong>Inflation at {m.inflation}%</strong>: {m.inflation > 6 ? "Above RBI target — Equity funds provide better inflation-beating returns" : "Within target range — Positive for equity markets"}</li>
-            <li>• <strong>Repo Rate at {m.repoRate}%</strong>: {m.repoRate > 6.5 ? "Higher rates may slow growth — prefer quality funds" : "Rate environment supports equity growth"}</li>
-          </ul>
-        </div>
-        <div className="p-4 rounded-xl border border-purple-500/20 bg-purple-950/20">
-          <h3 className="text-sm font-bold text-purple-400 mb-2">💡 Investment Decision Today</h3>
-          <div className="space-y-2 text-xs text-slate-300">
-            <p><strong>Should you invest this week?</strong></p>
-            <p className={`text-sm font-bold ${data.weeklySignal === "BUY" ? "text-emerald-400" : "text-amber-400"}`}>
-              {data.weeklySignal === "BUY" ? "✅ YES — Market conditions are favorable" : data.weeklySignal === "HOLD" ? "⏳ MAINTAIN SIP — Continue regular investment" : "⚠️ CAUTIOUS — Stick to SIP, avoid lump sum"}
-            </p>
-            <p className="text-slate-400">
-              For a 10–15 year investor, every week is a good week to invest via SIP.
-              Market timing is less important than consistency. The best time to invest was 10 years ago.
-              The second best time is today.
-            </p>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
+function Card({t,v}:{t:string;v:string}){return <div className="rounded-xl border border-white/10 bg-white/[.03] p-4"><div className="text-[11px] text-slate-500">{t}</div><div className="text-lg font-bold mt-1">{v}</div></div>}
+function MiniChart({points}:{points:number[]}){if(!points.length)return null;const min=Math.min(...points),max=Math.max(...points);return <svg viewBox="0 0 300 70" className="w-full h-full"><polyline fill="none" stroke="#818cf8" strokeWidth="2" points={points.map((v,i)=>`${i/(points.length-1)*300},${68-(v-min)/Math.max(1,max-min)*60}`).join(" ")}/></svg>}
+function Planner({budget,setBudget,cadence,setCadence,minPct,maxPct,setMin,setMax,allocation}:{budget:number;setBudget:(n:number)=>void;cadence:string;setCadence:(x:any)=>void;minPct:number;maxPct:number;setMin:(n:number)=>void;setMax:(n:number)=>void;allocation:any[]}){return <section className="max-w-5xl mx-auto space-y-4"><div className="rounded-xl border border-white/10 bg-white/[.03] p-5"><h2 className="text-xl font-bold">SIP Planner</h2><div className="grid md:grid-cols-4 gap-4 mt-4"><label className="text-xs text-slate-400">Amount<input type="number" value={budget} onChange={e=>setBudget(Math.max(1000,+e.target.value))} className="mt-1 w-full bg-black/30 border border-white/10 rounded p-2 text-white"/></label><label className="text-xs text-slate-400">Cadence<select value={cadence} onChange={e=>setCadence(e.target.value)} className="mt-1 w-full bg-black/30 border border-white/10 rounded p-2 text-white"><option value="monthly">Monthly</option><option value="weekly">Weekly (4×)</option></select></label><label className="text-xs text-slate-400">Min %<input type="number" min="0" max="10" value={minPct} onChange={e=>setMin(+e.target.value)} className="mt-1 w-full bg-black/30 border border-white/10 rounded p-2"/></label><label className="text-xs text-slate-400">Max %<input type="number" min="10" max="50" value={maxPct} onChange={e=>setMax(+e.target.value)} className="mt-1 w-full bg-black/30 border border-white/10 rounded p-2"/></label></div><p className="text-[11px] text-slate-500 mt-4">Step-up example: start at ₹10,000 and increase 10% every 6 months. This screen intentionally leaves the trigger configurable rather than assuming a market forecast.</p></div><div className="rounded-xl border border-white/10 bg-white/[.03] p-5"><h3 className="font-bold mb-3">Suggested split</h3><div className="grid md:grid-cols-2 gap-2">{allocation.map(f=><div key={f.amfiCode} className="flex justify-between bg-black/20 rounded p-3 text-xs"><span>{f.shortName}</span><b>{money(f.amount)} · {(f.pct*100).toFixed(1)}%</b></div>)}</div></div></section>}
+function Portfolio({data,purchases,setPurchases,totalInvested,currentValue,gain,exportCsv}:{data:Fund[];purchases:Purchase[];setPurchases:(p:Purchase[])=>void;totalInvested:number;currentValue:number;gain:number;exportCsv:()=>void}){const [code,setCode]=useState(FUNDS[0].amfiCode),[units,setUnits]=useState(""),[amount,setAmount]=useState("");const add=()=>{if(!units||!amount)return;setPurchases([...purchases,{code,date:new Date().toISOString().slice(0,10),units:+units,amount:+amount}]);setUnits("");setAmount("")};return <section className="space-y-4"><div className="grid md:grid-cols-3 gap-3"><Card t="Invested" v={money(totalInvested)}/><Card t="Current NAV Value" v={money(currentValue)}/><Card t="Gain / Loss" v={money(gain)}/></div><div className="rounded-xl border border-white/10 bg-white/[.03] p-4"><div className="flex justify-between items-center"><h2 className="font-bold">Purchase Log</h2><button onClick={exportCsv} className="px-3 py-2 rounded bg-indigo-600 text-xs">Export CSV</button></div><div className="grid md:grid-cols-4 gap-2 mt-3"><select value={code} onChange={e=>setCode(e.target.value)} className="bg-black/30 border border-white/10 rounded p-2 text-xs">{FUNDS.map(f=><option key={f.amfiCode} value={f.amfiCode}>{f.shortName}</option>)}</select><input value={units} onChange={e=>setUnits(e.target.value)} placeholder="Units" className="bg-black/30 border border-white/10 rounded p-2 text-xs"/><input value={amount} onChange={e=>setAmount(e.target.value)} placeholder="Invested ₹" className="bg-black/30 border border-white/10 rounded p-2 text-xs"/><button onClick={add} className="bg-emerald-600 rounded p-2 text-xs">Mark invested</button></div><div className="mt-4 overflow-auto"><table className="w-full text-xs"><thead className="text-slate-500"><tr><th className="text-left p-2">Date</th><th>Fund</th><th>Units</th><th>Amount</th><th>NAV</th></tr></thead><tbody>{purchases.map((p,i)=>{const f=data.find(x=>x.amfiCode===p.code);return <tr key={i} className="border-t border-white/5"><td className="p-2">{p.date}</td><td>{FUNDS.find(x=>x.amfiCode===p.code)?.shortName}</td><td>{p.units}</td><td>{money(p.amount)}</td><td>{f?f.nav.toFixed(4):"—"}</td></tr>})}</tbody></table></div></div></section>}
